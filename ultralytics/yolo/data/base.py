@@ -141,33 +141,35 @@ class BaseDataset(Dataset):
                 self.labels[i]['cls'][:, 0] = 0
 
     def load_image(self, i):
-        """Loads 1 image from dataset index 'i', returns (im, resized hw)."""
-        im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i]
-        if im is None:  # not cached in RAM
-            if fn.exists():  # load npy
-                im = np.load(fn)
-            else:  # read image
-                im = cv2.imread(f)  # BGR
-                if im is None:
-                    raise FileNotFoundError(f'Image Not Found {f}')
-            h0, w0 = im.shape[:2]  # orig hw
-            r = self.imgsz / max(h0, w0)  # ratio
-            if r != 1:  # if sizes are not equal
-                interp = cv2.INTER_LINEAR if (self.augment or r > 1) else cv2.INTER_AREA
-                im = cv2.resize(im, (min(math.ceil(w0 * r), self.imgsz), min(math.ceil(h0 * r), self.imgsz)),
-                                interpolation=interp)
+    """Loads 1 image from dataset index 'i', returns (im, resized hw)."""
+    im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i]
+    if im is None:  # not cached in RAM
+        if fn.exists():  # load npy
+            im = np.load(fn)
+        else:  # read image
+            im = cv2.imread(f, cv2.IMREAD_UNCHANGED)  # Load image with all channels
+            if im is None:
+                raise FileNotFoundError(f'Image Not Found {f}')
+        h0, w0 = im.shape[:2]  # orig hw
 
-            # Add to buffer if training with augmentations
-            if self.augment:
-                self.ims[i], self.im_hw0[i], self.im_hw[i] = im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
-                self.buffer.append(i)
-                if len(self.buffer) >= self.max_buffer_length:
-                    j = self.buffer.pop(0)
-                    self.ims[j], self.im_hw0[j], self.im_hw[j] = None, None, None
+        r = self.imgsz / max(h0, w0)  # ratio
+        if r != 1:  # if sizes are not equal
+            interp = cv2.INTER_LINEAR if (self.augment or r > 1) else cv2.INTER_AREA
+            im = cv2.resize(im, (min(math.ceil(w0 * r), self.imgsz), min(math.ceil(h0 * r), self.imgsz)),
+                            interpolation=interp)
 
-            return im, (h0, w0), im.shape[:2]
+        # Add to buffer if training with augmentations
+        if self.augment:
+            self.ims[i], self.im_hw0[i], self.im_hw[i] = im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
+            self.buffer.append(i)
+            if len(self.buffer) >= self.max_buffer_length:
+                j = self.buffer.pop(0)
+                self.ims[j], self.im_hw0[j], self.im_hw[j] = None, None, None
 
-        return self.ims[i], self.im_hw0[i], self.im_hw[i]
+        return im, (h0, w0), im.shape[:2]
+
+    return self.ims[i], self.im_hw0[i], self.im_hw[i]
+
 
     def cache_images(self, cache):
         """Cache images to memory or disk."""
